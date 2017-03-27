@@ -23,6 +23,7 @@ extern pde_t *kern_pgdir;
  * non-kernel virtual address.
  */
 #define PADDR(kva) _paddr(__FILE__, __LINE__, kva)
+#define pa2page(kva) _pa2page(__FILE__, __LINE__, kva)
 
 static inline physaddr_t
 _paddr(const char *file, int line, void *kva)
@@ -69,10 +70,11 @@ page2pa(struct PageInfo *pp)
 }
 
 static inline struct PageInfo*
-pa2page(physaddr_t pa)
+_pa2page(const char *file, int line,physaddr_t pa)
 {
 	if (PGNUM(pa) >= npages)
-		panic("pa2page called with invalid pa");
+		_panic(file, line, "pa2page called with invalid pa %08lx", pa);
+		//panic("pa2page called with invalid pa");
 	return &pages[PGNUM(pa)];
 }
 
