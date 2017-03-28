@@ -192,6 +192,7 @@ cga_putc(int c)
 	}
 
 	// What is the purpose of this?
+	// 我的理解是将屏幕的第二行到最后一行的位置上移一行，并将最后一行的数据清空。
 	if (crt_pos >= CRT_SIZE) {
 		int i;
 
