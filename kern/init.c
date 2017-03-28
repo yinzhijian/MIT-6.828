@@ -3,13 +3,31 @@
 #include <inc/stdio.h>
 #include <inc/string.h>
 #include <inc/assert.h>
+#include <inc/x86.h>
 
 #include <kern/monitor.h>
 #include <kern/console.h>
 #include <kern/pmap.h>
 #include <kern/kclock.h>
 
-
+void 
+print_cpu_info()
+{
+	uint32_t eaxp,ebxp,ecxp,edxp;
+	cpuid(0,&eaxp,&ebxp,&ecxp,&edxp);
+	cprintf("cpu is %d ,%c%c%c%c %c%c%c%c %c%c%c%c\n", eaxp,ebxp,ebxp>>8,ebxp>>16,ebxp>>24,ecxp,ecxp>>8,ecxp>>16,ecxp>>24,edxp,edxp>>8,edxp>>16,edxp>>24);
+}
+bool PSE_SUPPORT;
+void
+cpu_pse_check()
+{
+	uint32_t eaxp,ebxp,ecxp,edxp;
+	cpuid(1,&eaxp,&ebxp,&ecxp,&edxp);
+	if(edxp & 8){
+		PSE_SUPPORT = true;
+		cprintf("cpu support pse!\n");
+	}
+}
 void
 i386_init(void)
 {
@@ -25,6 +43,8 @@ i386_init(void)
 	cons_init();
 
 	cprintf("6828 decimal is %o octal!\n", 6828);
+	print_cpu_info();
+	cpu_pse_check();
 
 	// Lab 2 memory management initialization functions
 	mem_init();
