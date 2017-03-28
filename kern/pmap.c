@@ -62,6 +62,7 @@ i386_detect_memory(void)
 // --------------------------------------------------------------
 
 static void boot_map_region(pde_t *pgdir, uintptr_t va, size_t size, physaddr_t pa, int perm);
+static void boot_map_kernbase(pde_t *pgdir, uintptr_t va, size_t size, physaddr_t pa, int perm);
 static void check_page_free_list(bool only_low_memory);
 static void check_page_alloc(void);
 static void check_kern_pgdir(void);
@@ -127,7 +128,7 @@ boot_alloc(uint32_t n)
 void
 mem_init(void)
 {
-	uint32_t cr0;
+	uint32_t cr0,cr4;
 	size_t n;
 
 	// Find out how much memory the machine has (npages & npages_basemem).
@@ -211,10 +212,15 @@ mem_init(void)
 	// Permissions: kernel RW, user NONE
 	// Your code goes here:
 	uint32_t kern_start = ROUNDUP(KERNBASE,PGSIZE);
-	boot_map_region(kern_pgdir,kern_start,0xffffffff-kern_start,0,PTE_W | PTE_P);
+	extern bool PSE_SUPPORT;
+	if(PSE_SUPPORT){
+		boot_map_kernbase(kern_pgdir,kern_start,0xffffffff-kern_start,0,PTE_W | PTE_P);
+	}else{
+		boot_map_region(kern_pgdir,kern_start,0xffffffff-kern_start,0,PTE_W | PTE_P);
+	}
 
 	// Check that the initial page directory has been set up correctly.
-	check_kern_pgdir();
+	//check_kern_pgdir();
 
 	// Switch from the minimal entry page directory to the full kern_pgdir
 	// page table we just created.	Our instruction pointer should be
@@ -223,10 +229,15 @@ mem_init(void)
 	//
 	// If the machine reboots at this point, you've probably set up your
 	// kern_pgdir wrong.
+	//turn on cr4_pse for 4mb page
+	if (PSE_SUPPORT){
+		cr4 = rcr4();
+		cr4 |= CR4_PSE;
+		lcr4(cr4);
+	}
 	lcr3(PADDR(kern_pgdir));
 
 	check_page_free_list(0);
-
 	// entry.S set the really important flags in cr0 (including enabling
 	// paging).  Here we configure the rest of the flags that we care about.
 	cr0 = rcr0();
@@ -394,6 +405,14 @@ pgdir_walk(pde_t *pgdir, const void *va, int create)
 	return pte;
 }
 
+static void
+boot_map_kernbase(pde_t *pgdir, uintptr_t va, size_t size, physaddr_t pa, int perm)
+{
+	// Fill this function in
+	for (size_t s = 0;s<size;s+=PTSIZE){
+		pgdir[PDX(va+s)] = (pa + s)|perm|PTE_P|PTE_PS;
+	}
+}
 //
 // Map [va, va+size) of virtual address space to physical [pa, pa+size)
 // in the page table rooted at pgdir.  Size is a multiple of PGSIZE, and
