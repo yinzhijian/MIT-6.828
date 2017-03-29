@@ -278,6 +278,17 @@ region_alloc(struct Env *e, void *va, size_t len)
 	//   'va' and 'len' values that are not page-aligned.
 	//   You should round va down, and round (va + len) up.
 	//   (Watch out for corner-cases!)
+	struct PageInfo* pi;
+	for (size_t s = 0;s<ROUNDUP(len,PGSIZE);s+=PGSIZE){
+		pi = page_alloc(0);
+		if (pi == NULL)
+                        panic("page alloc fail");
+                pte_t *pte = pgdir_walk(e->env_pgdir,(void *)(ROUNDDOWN(va + s,PGSIZE)),1);
+                if (pte == NULL)
+                        panic("boot_map_region pte is NULL");
+                *pte = page2pa(pi)|PTE_U|PTE_W|PTE_P;
+        }
+
 }
 
 //
@@ -305,6 +316,24 @@ region_alloc(struct Env *e, void *va, size_t len)
 static void
 load_icode(struct Env *e, uint8_t *binary)
 {
+	struct Proghdr *ph, *eph;
+	struct Elf *ELFHDR = (struct Elf *) binary;
+	// is this a valid ELF?
+	if (ELFHDR->e_magic != ELF_MAGIC)
+		panic("magic error");
+	// load each program segment (ignores ph flags)
+	ph = (struct Proghdr *) ((uint8_t *) ELFHDR + ELFHDR->e_phoff);
+	eph = ph + ELFHDR->e_phnum;
+	for (; ph < eph; ph++){
+		if (ph->p_type != ELF_PROG_LOAD)
+			continue;
+		// p_pa is the load address of this segment (as well
+		// as the physical address)
+		region_alloc(e,(void *)(ph->p_pa),ph->p_memsz);
+		memcpy((void *)(ph->p_pa),(void *)(ELFHDR+(ph->p_offset)),ph->p_filesz);
+		memset((void *)(ph->p_pa+ph->p_filesz),0,ph->p_memsz);
+	}
+	
 	// Hints:
 	//  Load each program segment into virtual memory
 	//  at the address specified in the ELF section header.
@@ -332,6 +361,8 @@ load_icode(struct Env *e, uint8_t *binary)
 	//  You must also do something with the program's entry point,
 	//  to make sure that the environment starts executing there.
 	//  What?  (See env_run() and env_pop_tf() below.)
+	e->env_tf.tf_eip=(uintptr_t)(ELFHDR->e_entry);
+	
 
 	// LAB 3: Your code here.
 
@@ -339,6 +370,7 @@ load_icode(struct Env *e, uint8_t *binary)
 	// at virtual address USTACKTOP - PGSIZE.
 
 	// LAB 3: Your code here.
+	region_alloc(e,(void *)(USTACKTOP-PGSIZE),PGSIZE);
 }
 
 //
@@ -351,6 +383,11 @@ load_icode(struct Env *e, uint8_t *binary)
 void
 env_create(uint8_t *binary, enum EnvType type)
 {
+	struct Env *e;
+	if(env_alloc(&e,0)<0)
+		panic("env alloc error\n");
+	load_icode(e,binary);
+	e->env_type = type;
 	// LAB 3: Your code here.
 }
 
@@ -468,7 +505,15 @@ env_run(struct Env *e)
 	//	e->env_tf to sensible values.
 
 	// LAB 3: Your code here.
-
+	if (curenv != NULL){
+		if( curenv->env_status == ENV_RUNNING)
+			curenv->env_status = ENV_RUNNABLE;
+	}
+	e->env_status = ENV_RUNNING;
+	e->env_runs++;
+	curenv = e;
+	lcr3((uint32_t)(curenv->env_pgdir));
+	env_pop_tf(&(curenv->env_tf));
 	panic("env_run not yet implemented");
 }
 
