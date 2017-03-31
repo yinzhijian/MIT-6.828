@@ -236,7 +236,7 @@ env_alloc(struct Env **newenv_store, envid_t parent_id)
 	// to prevent the register values
 	// of a prior environment inhabiting this Env structure
 	// from "leaking" into our new environment.
-	memset(&e->env_tf, 0, sizeof(e->env_tf));
+	memset(&(e->env_tf), 0, sizeof(e->env_tf));
 
 	// Set up appropriate initial values for the segment registers.
 	// GD_UD is the user data segment selector in the GDT, and
@@ -324,14 +324,16 @@ load_icode(struct Env *e, uint8_t *binary)
 	// load each program segment (ignores ph flags)
 	ph = (struct Proghdr *) ((uint8_t *) ELFHDR + ELFHDR->e_phoff);
 	eph = ph + ELFHDR->e_phnum;
+	lcr3(PADDR(e->env_pgdir));
 	for (; ph < eph; ph++){
 		if (ph->p_type != ELF_PROG_LOAD)
 			continue;
 		// p_pa is the load address of this segment (as well
 		// as the physical address)
-		region_alloc(e,(void *)(ph->p_pa),ph->p_memsz);
-		memcpy((void *)(ph->p_pa),(void *)(ELFHDR+(ph->p_offset)),ph->p_filesz);
-		memset((void *)(ph->p_pa+ph->p_filesz),0,ph->p_memsz);
+		region_alloc(e,(void *)(ph->p_va),ph->p_memsz);
+		memcpy((void *)(ph->p_va),(void *)(ELFHDR+(ph->p_offset)),ph->p_filesz);
+		if( ph->p_memsz > ph->p_filesz)
+			memset((void *)(ph->p_va+ph->p_filesz),0,ph->p_memsz-ph->p_filesz);
 	}
 	
 	// Hints:
@@ -370,6 +372,7 @@ load_icode(struct Env *e, uint8_t *binary)
 	// at virtual address USTACKTOP - PGSIZE.
 
 	// LAB 3: Your code here.
+	lcr3(PADDR(kern_pgdir));
 	region_alloc(e,(void *)(USTACKTOP-PGSIZE),PGSIZE);
 }
 
@@ -512,8 +515,9 @@ env_run(struct Env *e)
 	e->env_status = ENV_RUNNING;
 	e->env_runs++;
 	curenv = e;
-	lcr3((uint32_t)(curenv->env_pgdir));
+	lcr3(PADDR(curenv->env_pgdir));
 	env_pop_tf(&(curenv->env_tf));
+	//todo memcpy still has problem
 	panic("env_run not yet implemented");
 }
 
