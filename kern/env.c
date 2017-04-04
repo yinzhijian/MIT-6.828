@@ -279,11 +279,11 @@ region_alloc(struct Env *e, void *va, size_t len)
 	//   You should round va down, and round (va + len) up.
 	//   (Watch out for corner-cases!)
 	struct PageInfo* pi;
-	for (size_t s = 0;s<ROUNDUP(len,PGSIZE);s+=PGSIZE){
+	for (size_t s = ROUNDDOWN((uint32_t)va,PGSIZE);s<ROUNDUP((uint32_t)va+len,PGSIZE);s+=PGSIZE){
 		pi = page_alloc(0);
 		if (pi == NULL)
                         panic("page alloc fail");
-                pte_t *pte = pgdir_walk(e->env_pgdir,(void *)(ROUNDDOWN(va + s,PGSIZE)),1);
+                pte_t *pte = pgdir_walk(e->env_pgdir,(void *)(s),1);
                 if (pte == NULL)
                         panic("boot_map_region pte is NULL");
                 *pte = page2pa(pi)|PTE_U|PTE_W|PTE_P;
@@ -291,6 +291,25 @@ region_alloc(struct Env *e, void *va, size_t len)
 
 }
 
+/**static void
+copy_to_env(struct Env *e,struct Proghdr *ph,struct Elf *ELFHDR)
+{
+	uint32_t kva,p_va;
+	uint32_t remain_size = ph->p_filesz;
+	//consider ph->p_va has not aligned
+	uint32_t oper_size = remain_size>PGSIZE-PGOFF(ph->p_va)?PGSIZE-PGOFF(ph->p_va):remain_size;
+	uint32_t offset = ph->p_offset;
+	cprintf("init remain_size:%x,offset:%x,oper_size:%d,EFLHDR:%x\n",remain_size,offset,oper_size,ELFHDR);
+	p_va = ph->p_va;
+	while(p_va<ph->p_va+ph->p_filesz){
+		kva = (uint32_t )(KADDR(va2pa(e->env_pgdir,p_va))) + PGOFF(p_va);
+		memcpy((void *)kva,(void *)(((uint32_t)ELFHDR)+offset),oper_size);
+		p_va = ROUNDDOWN(p_va+PGSIZE,PGSIZE);
+		remain_size -= oper_size;
+		offset += PGSIZE;
+		oper_size = remain_size>PGSIZE?PGSIZE:remain_size;
+	}
+}*/
 //
 // Set up the initial program binary, stack, and processor flags
 // for a user process.
@@ -324,14 +343,16 @@ load_icode(struct Env *e, uint8_t *binary)
 	// load each program segment (ignores ph flags)
 	ph = (struct Proghdr *) ((uint8_t *) ELFHDR + ELFHDR->e_phoff);
 	eph = ph + ELFHDR->e_phnum;
-	lcr3(PADDR(e->env_pgdir));
+	//lcr3(PADDR(e->env_pgdir));
 	for (; ph < eph; ph++){
 		if (ph->p_type != ELF_PROG_LOAD)
 			continue;
 		// p_pa is the load address of this segment (as well
 		// as the physical address)
 		region_alloc(e,(void *)(ph->p_va),ph->p_memsz);
-		memcpy((void *)(ph->p_va),(void *)(ELFHDR+(ph->p_offset)),ph->p_filesz);
+		lcr3(PADDR(e->env_pgdir));
+		//copy_to_env(e,ph,ELFHDR);
+		memcpy((void *)(ph->p_va),(void *)(((uint32_t)ELFHDR)+ph->p_offset),ph->p_filesz);
 		if( ph->p_memsz > ph->p_filesz)
 			memset((void *)(ph->p_va+ph->p_filesz),0,ph->p_memsz-ph->p_filesz);
 	}
@@ -391,6 +412,7 @@ env_create(uint8_t *binary, enum EnvType type)
 		panic("env alloc error\n");
 	load_icode(e,binary);
 	e->env_type = type;
+	e->env_parent_id = 0;
 	// LAB 3: Your code here.
 }
 
