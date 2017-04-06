@@ -304,6 +304,7 @@ page_init(void)
 	// LAB 4:
 	// Change your code to mark the physical page at MPENTRY_PADDR
 	// as in use
+	pages[MPENTRY_PADDR>>PGSHIFT].pp_ref = 1;
 
 	// The example code here marks all physical pages as free.
 	// However this is not truly the case.  What memory is free?
@@ -612,7 +613,12 @@ mmio_map_region(physaddr_t pa, size_t size)
 	// Hint: The staff solution uses boot_map_region.
 	//
 	// Your code here:
-	panic("mmio_map_region not implemented");
+	uint32_t pgsize = ROUNDUP(size,PGSIZE);
+	if (base+pgsize >= MMIOLIM)
+		panic("mmio_map_region reservation would overflow MMIOLIM");
+	boot_map_region(kern_pgdir,base,pgsize,pa,PTE_PCD | PTE_PWT | PTE_W | PTE_P);
+	return (void *)base;
+	//panic("mmio_map_region not implemented");
 }
 
 static uintptr_t user_mem_check_addr;
