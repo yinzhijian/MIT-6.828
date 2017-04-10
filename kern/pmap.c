@@ -283,6 +283,9 @@ mem_init_mp(void)
 	//     Permissions: kernel RW, user NONE
 	//
 	// LAB 4: Your code here:
+	for (uint32_t i = 0;i*(KSTKSIZE+KSTKGAP)<PTSIZE && i < NCPU;i++){
+		boot_map_region(kern_pgdir,KSTACKTOP-i*(KSTKSIZE+KSTKGAP)-KSTKSIZE,KSTKSIZE,PADDR(percpu_kstacks)+i*KSTKSIZE,PTE_W | PTE_P);
+	}
 
 }
 
@@ -334,13 +337,13 @@ page_init(void)
 	for (i = (IOPHYSMEM >>PGSHIFT); i <(EXTPHYSMEM >>PGSHIFT);i++) {
 		pages[i].pp_ref = 1;
 	}
-	//0x10000 ~ end ~ page table are unusable
-	extern char end[];                                              
+	//0x100000 ~ end ~ page table are unusable
+	//extern char end[];                                              
 	physaddr_t first_free_addr = PADDR(boot_alloc(0));
-	for (i = (0x10000 >>PGSHIFT); i < (first_free_addr >>PGSHIFT) ; i++) {
+	for (i = (0x100000 >>PGSHIFT); i < (first_free_addr >>PGSHIFT) ; i++) {
 		pages[i].pp_ref = 1;
 	}
-	for (i = 0; i < npages; i++) {
+	for (i = npages-1; i > 0; i--) {
 		if (pages[i].pp_ref > 0)
 			continue;
 		pages[i].pp_ref = 0;
@@ -614,10 +617,12 @@ mmio_map_region(physaddr_t pa, size_t size)
 	//
 	// Your code here:
 	uint32_t pgsize = ROUNDUP(size,PGSIZE);
+	uint32_t start_base = base;
 	if (base+pgsize >= MMIOLIM)
 		panic("mmio_map_region reservation would overflow MMIOLIM");
 	boot_map_region(kern_pgdir,base,pgsize,pa,PTE_PCD | PTE_PWT | PTE_W | PTE_P);
-	return (void *)base;
+    base += pgsize;
+	return (void *)start_base;
 	//panic("mmio_map_region not implemented");
 }
 
