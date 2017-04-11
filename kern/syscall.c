@@ -54,7 +54,6 @@ sys_env_destroy(envid_t envid)
 {
 	int r;
 	struct Env *e;
-    cprintf("[%08x] start destroy %08x\n", curenv->env_id, e->env_id);
 
 	if ((r = envid2env(envid, &e, 1)) < 0)
 		return r;

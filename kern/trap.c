@@ -338,6 +338,8 @@ page_fault_handler(struct Trapframe *tf)
     if (curenv->env_pgfault_upcall != NULL && (tf->tf_esp >= UXSTACKTOP-PGSIZE || tf->tf_esp <= USTACKTOP)){
         if (tf->tf_esp < UXSTACKTOP-PGSIZE && tf->tf_esp > USTACKTOP)
         user_mem_assert(curenv,(void *)(UXSTACKTOP-PGSIZE),PGSIZE,PTE_W);
+	cprintf("[%08x] user fault va %08x ip %08x esp %08x ebp %08x\n",
+		curenv->env_id, fault_va, tf->tf_eip,tf->tf_esp,tf->tf_regs.reg_ebp);
         //tf->tf_esp is already on the user exception stack
         if (tf->tf_esp >= UXSTACKTOP-PGSIZE && tf->tf_esp < UXSTACKTOP){
             excption_stack = tf->tf_esp - sizeof(struct UTrapframe) - sizeof(uintptr_t);//reserved for trap-time eip
@@ -363,6 +365,8 @@ page_fault_handler(struct Trapframe *tf)
         //change tf->eip & tf->esp to user exception handler
         curenv->env_tf.tf_eip = (uintptr_t)curenv->env_pgfault_upcall;
         curenv->env_tf.tf_esp = excption_stack;
+	cprintf("[%08x] user fault upcall ip %08x excption stack %08x\n",
+		curenv->env_id,curenv->env_tf.tf_eip,excption_stack);
         env_run(curenv);
     }
 	// Destroy the environment that caused the fault.

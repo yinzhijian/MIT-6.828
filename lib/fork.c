@@ -7,7 +7,7 @@
 // It is one of the bits explicitly allocated to user processes (PTE_AVAIL).
 #define PTE_COW		0x800
 
-extern void (*_pgfault_handler)(struct UTrapframe *utf);
+extern void _pgfault_upcall(void);
 //
 // Custom page fault handler - if faulting page is copy-on-write,
 // map in our own private writable copy.
@@ -19,6 +19,10 @@ pgfault(struct UTrapframe *utf)
 	uint32_t err = utf->utf_err;
 	int r;
 
+	const volatile struct Env *thisenv = &envs[ENVX(sys_getenvid())];
+	if ((err & FEC_WR) == 0 ){
+        panic("[%08x]fault_va was not a write %08x ,eip:%08x",thisenv->env_id,addr,utf->utf_eip);
+	}
 	// Check that the faulting access was (1) a write, and (2) to a
 	// copy-on-write page.  If not, panic.
 	// Hint:
@@ -26,21 +30,21 @@ pgfault(struct UTrapframe *utf)
 	//   (see <inc/memlayout.h>).
 
 	// LAB 4: Your code here.
-    if((uvpt[PGNUM(addr)] & (PTE_W|PTE_COW)) <= 0)
-        panic("fault_va was not a write and copy on write page %08x ,eip:%08x",addr,utf->utf_eip);
+    if((uvpt[PGNUM(addr)] & (PTE_COW)) == 0)
+        panic("fault_va is not a copy on write page %08x ,eip:%08x",addr,utf->utf_eip);
 
 	// Allocate a new page, map it at a temporary location (PFTEMP),
 	// copy the data from the old page to the new page, then move the new
 	// page to the old page's address.
 	// Hint:
 	//   You should make three system calls.
-    cprintf("[%08x] line:%d pgfault va:%08x\n", thisenv->env_id,__LINE__,addr);
+    //cprintf("[%08x] line:%d pgfault va:%08x\n", thisenv->env_id,__LINE__,addr);
 
 	// LAB 4: Your code here.
 	if ((r = sys_page_alloc(thisenv->env_id, PFTEMP, PTE_P|PTE_U|PTE_W)) < 0)
 		panic("sys_page_alloc: %e", r);
 	memmove(PFTEMP, ROUNDDOWN(addr,PGSIZE), PGSIZE);
-	if ((r = sys_page_map(thisenv->env_id, ROUNDDOWN(addr,PGSIZE), thisenv->env_id,PFTEMP , PTE_P|PTE_U|PTE_W)) < 0)
+	if ((r = sys_page_map(thisenv->env_id, PFTEMP, thisenv->env_id,ROUNDDOWN(addr,PGSIZE), PTE_P|PTE_U|PTE_W)) < 0)
 		panic("sys_page_map: %e", r);
 	if ((r = sys_page_unmap(thisenv->env_id, PFTEMP)) < 0)
 		panic("sys_page_unmap: %e", r);
@@ -55,6 +59,8 @@ pgfault(struct UTrapframe *utf)
 // marked copy-on-write as well.  (Exercise: Why do we need to mark ours
 // copy-on-write again if it was already copy-on-write at the beginning of
 // this function?)
+// anwser: it can be cleared by another child before we mark child's copy-on-write
+
 //
 // Returns: 0 on success, < 0 on error.
 // It is also OK to panic on error.
@@ -98,23 +104,28 @@ duppage(envid_t envid, unsigned pn)
 envid_t
 fork(void)
 {
+        set_pgfault_handler(pgfault);
 	envid_t envid;
-    int r;
+	int r;
 	uint8_t *addr;
-    set_pgfault_handler(pgfault);
 	envid = sys_exofork();
 	if (envid < 0)
 		panic("sys_exofork: %e", envid);
-	if (envid == 0) {
+	else if (envid == 0) {
 		// We're the child.
 		// The copied value of the global variable 'thisenv'
 		// is no longer valid (it refers to the parent!).
 		// Fix it and return 0.
-        _pgfault_handler = 0;
 		thisenv = &envs[ENVX(sys_getenvid())];
-        set_pgfault_handler(pgfault);
+	        cprintf("[%08x] end reset thisenv\n", thisenv->env_id);
+		//set_pgfault_handler(pgfault);
 		return 0;
 	}
+	//set child's pgfault handler
+	if ((r = sys_page_alloc(envid, (void*) (UXSTACKTOP - PGSIZE), PTE_P|PTE_U|PTE_W)) < 0)
+		panic("sys_page_alloc: %e", r);
+	if ((r = sys_env_set_pgfault_upcall(envid, (void*) _pgfault_upcall)) < 0)
+		panic("sys_env_set_pgfault_upcall: %e", r);
 
 	// We're the parent.
 	for (addr =  0; addr < (uint8_t*)USTACKTOP; addr += PGSIZE){
