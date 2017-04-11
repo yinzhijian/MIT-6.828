@@ -7,6 +7,7 @@
 // It is one of the bits explicitly allocated to user processes (PTE_AVAIL).
 #define PTE_COW		0x800
 
+extern void (*_pgfault_handler)(struct UTrapframe *utf);
 //
 // Custom page fault handler - if faulting page is copy-on-write,
 // map in our own private writable copy.
@@ -25,16 +26,26 @@ pgfault(struct UTrapframe *utf)
 	//   (see <inc/memlayout.h>).
 
 	// LAB 4: Your code here.
+    if((uvpt[PGNUM(addr)] & (PTE_W|PTE_COW)) <= 0)
+        panic("fault_va was not a write and copy on write page %08x ,eip:%08x",addr,utf->utf_eip);
 
 	// Allocate a new page, map it at a temporary location (PFTEMP),
 	// copy the data from the old page to the new page, then move the new
 	// page to the old page's address.
 	// Hint:
 	//   You should make three system calls.
+    cprintf("[%08x] line:%d pgfault va:%08x\n", thisenv->env_id,__LINE__,addr);
 
 	// LAB 4: Your code here.
-
-	panic("pgfault not implemented");
+	if ((r = sys_page_alloc(thisenv->env_id, PFTEMP, PTE_P|PTE_U|PTE_W)) < 0)
+		panic("sys_page_alloc: %e", r);
+	memmove(PFTEMP, ROUNDDOWN(addr,PGSIZE), PGSIZE);
+	if ((r = sys_page_map(thisenv->env_id, ROUNDDOWN(addr,PGSIZE), thisenv->env_id,PFTEMP , PTE_P|PTE_U|PTE_W)) < 0)
+		panic("sys_page_map: %e", r);
+	if ((r = sys_page_unmap(thisenv->env_id, PFTEMP)) < 0)
+		panic("sys_page_unmap: %e", r);
+    
+	//panic("pgfault not implemented");
 }
 
 //
@@ -54,7 +65,17 @@ duppage(envid_t envid, unsigned pn)
 	int r;
 
 	// LAB 4: Your code here.
-	panic("duppage not implemented");
+    int perm = PTE_P|PTE_U;
+    // pde_t not present
+    if (uvpt[pn] & PTE_W)
+        perm |= PTE_COW;
+    else if (uvpt[pn] & PTE_COW)
+        perm |= PTE_COW;
+	if ((r = sys_page_map(thisenv->env_id, (void *)(pn*PGSIZE), envid, (void *)(pn*PGSIZE), perm)) < 0)
+		panic("sys_page_map: %e", r);
+	if ((r = sys_page_map(envid, (void *)(pn*PGSIZE),thisenv->env_id, (void *)(pn*PGSIZE), perm)) < 0)
+		panic("sys_page_map: %e", r);
+	//panic("duppage not implemented");
 	return 0;
 }
 
@@ -77,8 +98,38 @@ duppage(envid_t envid, unsigned pn)
 envid_t
 fork(void)
 {
+	envid_t envid;
+    int r;
+	uint8_t *addr;
+    set_pgfault_handler(pgfault);
+	envid = sys_exofork();
+	if (envid < 0)
+		panic("sys_exofork: %e", envid);
+	if (envid == 0) {
+		// We're the child.
+		// The copied value of the global variable 'thisenv'
+		// is no longer valid (it refers to the parent!).
+		// Fix it and return 0.
+        _pgfault_handler = 0;
+		thisenv = &envs[ENVX(sys_getenvid())];
+        set_pgfault_handler(pgfault);
+		return 0;
+	}
+
+	// We're the parent.
+	for (addr =  0; addr < (uint8_t*)USTACKTOP; addr += PGSIZE){
+	//for (;pn < PGNUM(MMIOLIM); pn += 4){
+        //only copy present page
+        if ((uvpd[PDX(addr)] & PTE_P) == 0 || (uvpt[PGNUM(addr)] & PTE_P) == 0)
+            continue;
+		duppage(envid, PGNUM(addr));
+    }
 	// LAB 4: Your code here.
-	panic("fork not implemented");
+	// Start the child environment running
+	if ((r = sys_env_set_status(envid, ENV_RUNNABLE)) < 0)
+		panic("sys_env_set_status: %e", r);
+	return envid;
+	//panic("fork not implemented");
 }
 
 // Challenge!

@@ -11,6 +11,7 @@
 #include <kern/syscall.h>
 #include <kern/console.h>
 #include <kern/sched.h>
+#define PTE_COW		0x800
 
 // Print a string to the system console.
 // The string is exactly 'len' characters long.
@@ -53,6 +54,7 @@ sys_env_destroy(envid_t envid)
 {
 	int r;
 	struct Env *e;
+    cprintf("[%08x] start destroy %08x\n", curenv->env_id, e->env_id);
 
 	if ((r = envid2env(envid, &e, 1)) < 0)
 		return r;
@@ -232,19 +234,31 @@ sys_page_map(envid_t srcenvid, void *srcva,
     result = envid2env(dstenvid,&dst_env,1);
     if (result < 0)
         return result;
-    if ((uint32_t)srcva >= UTOP || (uint32_t)srcva % PGSIZE != 0)
+    if ((uint32_t)srcva >= UTOP || (uint32_t)srcva % PGSIZE != 0){
+		cprintf("[%08x] line:%d inval\n", curenv->env_id,__LINE__);
         return -E_INVAL;
-    if ((uint32_t)dstva >= UTOP || (uint32_t)dstva % PGSIZE != 0)
+    }
+    if ((uint32_t)dstva >= UTOP || (uint32_t)dstva % PGSIZE != 0){
+		cprintf("[%08x] line:%d inval\n", curenv->env_id,__LINE__);
         return -E_INVAL;
-    if ((perm & PTE_U) <= 0 || (perm & PTE_P) <= 0)
+    }
+    if ((perm & PTE_U) <= 0 || (perm & PTE_P) <= 0){
+		cprintf("[%08x] line:%d inval\n", curenv->env_id,__LINE__);
         return -E_INVAL;
-    if ((perm | (PTE_U|PTE_P|PTE_AVAIL|PTE_W)) !=(PTE_U|PTE_P|PTE_AVAIL|PTE_W))
+    }
+    if ((perm | (PTE_U|PTE_P|PTE_AVAIL|PTE_W)) !=(PTE_U|PTE_P|PTE_AVAIL|PTE_W)){
+		cprintf("[%08x] line:%d inval\n", curenv->env_id,__LINE__);
         return -E_INVAL;
+    }
     src_page = page_lookup(src_env->env_pgdir,srcva,&src_pte);
-    if (src_page == NULL)
+    if (src_page == NULL){
+		cprintf("[%08x] line:%d srcva:%08x inval\n", curenv->env_id,__LINE__,srcva);
         return -E_INVAL;
-    if ((*src_pte & PTE_W) == 0 && (perm & PTE_W) > 0)
+    }
+    if ((*src_pte & (PTE_W |PTE_COW)) == 0 && (perm & PTE_W) > 0){
+		cprintf("[%08x] line:%d inval\n", curenv->env_id,__LINE__);
         return -E_INVAL;
+    }
     result = page_insert(dst_env->env_pgdir,src_page,dstva,perm);
     return result;
 	//panic("sys_page_map not implemented");

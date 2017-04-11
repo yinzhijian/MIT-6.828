@@ -27,10 +27,12 @@ set_pgfault_handler(void (*handler)(struct UTrapframe *utf))
 	int r;
 
 	if (_pgfault_handler == 0) {
+        cprintf("[%08x] line:%d first set\n", thisenv->env_id,__LINE__);
 		// First time through!
 		// LAB 4: Your code here.
 	    sys_page_alloc(thisenv->env_id, (void*) (UXSTACKTOP - PGSIZE), PTE_P|PTE_U|PTE_W);
 	    sys_env_set_pgfault_upcall(thisenv->env_id, (void*) _pgfault_upcall);
+        cprintf("[%08x] line:%d end first set\n", thisenv->env_id,__LINE__);
 		//panic("set_pgfault_handler not implemented");
 	}
 
