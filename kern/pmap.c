@@ -510,10 +510,17 @@ page_insert(pde_t *pgdir, struct PageInfo *pp, void *va, int perm)
 		*pte = page2pa(pp)|perm|PTE_P;
 		return 0;
 	}
-	if (*pte != 0)
-		page_remove(pgdir,va);
-	*pte = page2pa(pp)|perm|PTE_P;
-	pp->pp_ref++;
+	if (*pte != 0){
+        if((*pte&~0xfff) !=page2pa(pp)){
+            //cprintf("start remove pgdir %08x va %08x (*pte&~0xfff)=%08x page2pa(pp)=%08x\n",pgdir,va,(*pte&~0xfff),page2pa(pp));
+            page_remove(pgdir,va);
+            pp->pp_ref++;
+        }
+    }else{
+        pp->pp_ref++;
+    }
+    *pte = page2pa(pp)|perm|PTE_P;
+    //cprintf("pgdir %08x pp->pp_ref %ld pp address %08x pte&~0xfff=%08x\n",pgdir,pp->pp_ref,page2pa(pp),(*pte&~0xfff));
 	return 0;
 }
 
@@ -568,6 +575,7 @@ page_remove(pde_t *pgdir, void *va)
 	*pte_store = 0;
 	page_decref(pi);
 	if (pi->pp_ref == 0){
+        //cprintf("remove pp->pp_ref %ld pp address %08x\n",pi->pp_ref,page2pa(pi));
 		tlb_invalidate(pgdir,va);
 	}
 }

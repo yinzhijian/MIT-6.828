@@ -19,9 +19,10 @@ pgfault(struct UTrapframe *utf)
 	uint32_t err = utf->utf_err;
 	int r;
 
-	const volatile struct Env *thisenv = &envs[ENVX(sys_getenvid())];
+	//const volatile struct Env *thisenv = &envs[ENVX(sys_getenvid())];
+    envid_t env_id = sys_getenvid();
 	if ((err & FEC_WR) == 0 ){
-        panic("[%08x]fault_va was not a write %08x ,eip:%08x",thisenv->env_id,addr,utf->utf_eip);
+        panic("[%08x]fault_va was not a write %08x ,eip:%08x",env_id,addr,utf->utf_eip);
 	}
 	// Check that the faulting access was (1) a write, and (2) to a
 	// copy-on-write page.  If not, panic.
@@ -41,12 +42,12 @@ pgfault(struct UTrapframe *utf)
     //cprintf("[%08x] line:%d pgfault va:%08x\n", thisenv->env_id,__LINE__,addr);
 
 	// LAB 4: Your code here.
-	if ((r = sys_page_alloc(thisenv->env_id, PFTEMP, PTE_P|PTE_U|PTE_W)) < 0)
+	if ((r = sys_page_alloc(env_id, PFTEMP, PTE_P|PTE_U|PTE_W)) < 0)
 		panic("sys_page_alloc: %e", r);
-	memmove(PFTEMP, ROUNDDOWN(addr,PGSIZE), PGSIZE);
-	if ((r = sys_page_map(thisenv->env_id, PFTEMP, thisenv->env_id,ROUNDDOWN(addr,PGSIZE), PTE_P|PTE_U|PTE_W)) < 0)
+	memcpy(PFTEMP, ROUNDDOWN(addr,PGSIZE), PGSIZE);
+	if ((r = sys_page_map(env_id, PFTEMP, env_id,ROUNDDOWN(addr,PGSIZE), PTE_P|PTE_U|PTE_W)) < 0)
 		panic("sys_page_map: %e", r);
-	if ((r = sys_page_unmap(thisenv->env_id, PFTEMP)) < 0)
+	if ((r = sys_page_unmap(env_id, PFTEMP)) < 0)
 		panic("sys_page_unmap: %e", r);
     
 	//panic("pgfault not implemented");
@@ -104,7 +105,7 @@ duppage(envid_t envid, unsigned pn)
 envid_t
 fork(void)
 {
-        set_pgfault_handler(pgfault);
+    set_pgfault_handler(pgfault);
 	envid_t envid;
 	int r;
 	uint8_t *addr;

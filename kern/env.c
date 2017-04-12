@@ -299,6 +299,8 @@ region_alloc(struct Env *e, void *va, size_t len)
                 if (pte == NULL)
                         panic("boot_map_region pte is NULL");
                 *pte = page2pa(pi)|PTE_U|PTE_W|PTE_P;
+                pi->pp_ref++;
+
         }
 
 }
