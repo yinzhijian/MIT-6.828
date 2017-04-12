@@ -336,8 +336,9 @@ page_fault_handler(struct Trapframe *tf)
 
 	// LAB 4: Your code here.
     if (curenv->env_pgfault_upcall != NULL && (tf->tf_esp >= UXSTACKTOP-PGSIZE || tf->tf_esp <= USTACKTOP)){
-        if (tf->tf_esp < UXSTACKTOP-PGSIZE && tf->tf_esp > USTACKTOP)
-        user_mem_assert(curenv,(void *)(UXSTACKTOP-PGSIZE),PGSIZE,PTE_W);
+        //if (tf->tf_esp < UXSTACKTOP-PGSIZE && tf->tf_esp > USTACKTOP)
+        user_mem_assert(curenv,(void *)(curenv->env_pgfault_upcall),1,PTE_U);
+        user_mem_assert(curenv,(void *)(UXSTACKTOP-1),1,PTE_W);
 	//cprintf("[%08x] user fault va %08x ip %08x esp %08x ebp %08x\n",
 		//curenv->env_id, fault_va, tf->tf_eip,tf->tf_esp,tf->tf_regs.reg_ebp);
         //tf->tf_esp is already on the user exception stack
