@@ -118,7 +118,7 @@ fork(void)
 		// is no longer valid (it refers to the parent!).
 		// Fix it and return 0.
 		thisenv = &envs[ENVX(sys_getenvid())];
-	        cprintf("[%08x] end reset thisenv\n", thisenv->env_id);
+	        //cprintf("[%08x] end reset thisenv\n", thisenv->env_id);
 		//set_pgfault_handler(pgfault);
 		return 0;
 	}
