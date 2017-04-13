@@ -328,7 +328,42 @@ static int
 sys_ipc_try_send(envid_t envid, uint32_t value, void *srcva, unsigned perm)
 {
 	// LAB 4: Your code here.
-	panic("sys_ipc_try_send not implemented");
+    struct Env* target_env;
+    int r;
+    struct PageInfo * src_pi;
+    pte_t* pte_store;
+    if ((r = envid2env(envid,&target_env,0))<0)
+        return r;
+    if (target_env->env_ipc_recving == 0)
+        return -E_IPC_NOT_RECV;
+
+    if ((uintptr_t)srcva < UTOP){
+        if((uintptr_t)srcva % PGSIZE != 0)
+            return -E_INVAL;
+        if((perm | PTE_SYSCALL) !=PTE_SYSCALL)
+            return -E_INVAL;
+        if ((src_pi = page_lookup(curenv->env_pgdir,srcva,&pte_store)) == NULL)
+            return -E_INVAL;
+        if ((*pte_store & PTE_W) == 0 && (perm & PTE_W) !=0)
+            return -E_INVAL;
+        if ((uintptr_t)target_env->env_ipc_dstva < UTOP){
+            r = page_insert(target_env->env_pgdir,src_pi,target_env->env_ipc_dstva,perm);
+            if (r < 0)
+                return r;
+            target_env->env_ipc_perm = perm;
+        }else{
+            target_env->env_ipc_perm = 0;
+        }
+    }
+    //    env_ipc_recving is set to 0 to block future sends;
+    target_env->env_ipc_recving = 0;
+    // set recv env's return value
+    target_env->env_tf.tf_regs.reg_eax = 0;
+    target_env->env_ipc_value = value;
+    target_env->env_ipc_from = curenv->env_id;
+    target_env->env_status = ENV_RUNNABLE;
+    return 0;
+	//panic("sys_ipc_try_send not implemented");
 }
 
 // Block until a value is ready.  Record that you want to receive
@@ -346,7 +381,15 @@ static int
 sys_ipc_recv(void *dstva)
 {
 	// LAB 4: Your code here.
-	panic("sys_ipc_recv not implemented");
+    if ((uintptr_t)dstva < UTOP){
+        if ((uintptr_t)dstva % PGSIZE != 0)
+            return -E_INVAL; 
+        curenv->env_ipc_dstva = dstva;
+    }
+    curenv->env_status = ENV_NOT_RUNNABLE;
+    curenv->env_ipc_recving = 1;
+    sched_yield();
+	//panic("sys_ipc_recv not implemented");
 	return 0;
 }
 
@@ -384,6 +427,10 @@ syscall(uint32_t syscallno, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, 
 			return sys_env_set_status((envid_t)a1,(int)a2);
 		case SYS_env_set_pgfault_upcall:
 			return sys_env_set_pgfault_upcall((envid_t)a1,(void *)a2);
+		case SYS_ipc_try_send:
+			return sys_ipc_try_send((envid_t)a1, (uint32_t)a2, (void *)a3, (unsigned)a4);
+		case SYS_ipc_recv:
+			return sys_ipc_recv((void *)a1);
 		default:
 			return -E_INVAL;
 	}
