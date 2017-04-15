@@ -332,10 +332,21 @@ sys_ipc_try_send(envid_t envid, uint32_t value, void *srcva, unsigned perm)
     int r;
     struct PageInfo * src_pi;
     pte_t* pte_store;
-    if ((r = envid2env(envid,&target_env,0))<0)
-        return r;
-    if (target_env->env_ipc_recving == 0)
-        return -E_IPC_NOT_RECV;
+    if ((r = envid2env(envid,&target_env,0))<0){
+        curenv->env_ipc_wait_recv = envid;
+        curenv->env_status = ENV_NOT_RUNNABLE;
+        curenv->env_tf.tf_regs.reg_eax = r;
+        sched_yield();
+        //return r;
+    }
+    if (target_env->env_ipc_recving == 0){
+        curenv->env_ipc_wait_recv = envid;
+        curenv->env_status = ENV_NOT_RUNNABLE;
+        curenv->env_tf.tf_regs.reg_eax = -E_IPC_NOT_RECV;
+        sched_yield();
+        //return -E_IPC_NOT_RECV;
+    }
+    curenv->env_ipc_wait_recv = -1;
 
     if ((uintptr_t)srcva < UTOP){
         if((uintptr_t)srcva % PGSIZE != 0)
@@ -380,11 +391,27 @@ sys_ipc_try_send(envid_t envid, uint32_t value, void *srcva, unsigned perm)
 static int
 sys_ipc_recv(void *dstva)
 {
+    envid_t index;
 	// LAB 4: Your code here.
     if ((uintptr_t)dstva < UTOP){
         if ((uintptr_t)dstva % PGSIZE != 0)
             return -E_INVAL; 
         curenv->env_ipc_dstva = dstva;
+    }
+    //if there is a sender waiting,then revoke it
+    index = curenv->env_ipc_last_process;
+    do{
+        if (envs[index].env_ipc_wait_recv == curenv->env_id && envs[index].env_status == ENV_NOT_RUNNABLE)
+            break;
+        index = (index + 1) % NENV;
+    }while(index != curenv->env_ipc_last_process);
+    //found it!
+    if (envs[index].env_ipc_wait_recv == curenv->env_id){
+        curenv->env_ipc_last_process = index;
+        envs[index].env_status = ENV_RUNNABLE;
+        curenv->env_status = ENV_NOT_RUNNABLE;
+        curenv->env_ipc_recving = 1;
+        env_run(&envs[index]);
     }
     curenv->env_status = ENV_NOT_RUNNABLE;
     curenv->env_ipc_recving = 1;
