@@ -195,7 +195,7 @@ mem_init(void)
 	//    - pages itself -- kernel RW, user NONE
 	// Your code goes here:
 	uint32_t page_size = ROUNDUP(npages*sizeof(struct PageInfo), PGSIZE);
-	boot_map_region(kern_pgdir,UPAGES,page_size,PADDR(pages),PTE_W | PTE_P);
+	boot_map_region(kern_pgdir,UPAGES,page_size,PADDR(pages),PTE_U | PTE_P);
 	//////////////////////////////////////////////////////////////////////
 	// Map the 'envs' array read-only by the user at linear address UENVS
 	// (ie. perm = PTE_U | PTE_P).
@@ -574,10 +574,7 @@ page_remove(pde_t *pgdir, void *va)
 	//pg table entry corresponding to 'va' set to 0
 	*pte_store = 0;
 	page_decref(pi);
-	if (pi->pp_ref == 0){
-        //cprintf("remove pp->pp_ref %ld pp address %08x\n",pi->pp_ref,page2pa(pi));
-		tlb_invalidate(pgdir,va);
-	}
+    tlb_invalidate(pgdir,va);
 }
 
 //

@@ -49,7 +49,7 @@ bc_pgfault(struct UTrapframe *utf)
 	//
 	// LAB 5: you code here:
     addr = ROUNDDOWN(addr,PGSIZE);
-    sys_page_alloc(thisenv->env_id, (void*) addr, PTE_P|PTE_U|PTE_W);
+    sys_page_alloc(0, (void*) addr, PTE_P|PTE_U|PTE_W);
     if (( r= ide_read(((uint32_t)addr-DISKMAP)/SECTSIZE,addr,PGSIZE/SECTSIZE)) < 0)
 		panic("in bc_pgfault, ide_read: %e", r);
 	// Clear the dirty bit for the disk block page since we just read the
@@ -85,7 +85,7 @@ flush_block(void *addr)
     if ( !va_is_mapped(addr) || !va_is_dirty(addr))
         return;
 
-    if ((r = ide_write((uint32_t)(addr-DISKMAP)/SECTSIZE,addr,PGSIZE/SECTSIZE)) < 0)
+    if ((r = ide_write(blockno*BLKSECTS,addr,BLKSECTS)) < 0)
 		panic("in bc_pgfault, ide_read: %e", r);
 	if ((r = sys_page_map(0, addr, 0, addr, uvpt[PGNUM(addr)] & PTE_SYSCALL)) < 0)
 		panic("in bc_pgfault, sys_page_map: %e", r);

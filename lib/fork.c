@@ -72,15 +72,18 @@ duppage(envid_t envid, unsigned pn)
 	int r;
 
 	// LAB 4: Your code here.
-    int perm = PTE_P|PTE_U;
+    //int perm = PTE_P|PTE_U;
+    int perm = uvpt[pn] & PTE_SYSCALL;
     // pde_t not present
-    if (uvpt[pn] & PTE_W)
+    if ((perm & (PTE_W | PTE_SHARE)) == PTE_W){
         perm |= PTE_COW;
-    else if (uvpt[pn] & PTE_COW)
-        perm |= PTE_COW;
+        perm &= ~PTE_W;
+    }
 	if ((r = sys_page_map(thisenv->env_id, (void *)(pn*PGSIZE), envid, (void *)(pn*PGSIZE), perm)) < 0)
 		panic("sys_page_map: %e", r);
-	if ((r = sys_page_map(envid, (void *)(pn*PGSIZE),thisenv->env_id, (void *)(pn*PGSIZE), perm)) < 0)
+    if (perm & PTE_SHARE)
+        return 0;
+	if ((r = sys_page_map(thisenv->env_id, (void *)(pn*PGSIZE),thisenv->env_id, (void *)(pn*PGSIZE), perm)) < 0)
 		panic("sys_page_map: %e", r);
 	//panic("duppage not implemented");
 	return 0;

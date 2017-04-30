@@ -62,7 +62,7 @@ alloc_block(void)
 	// super->s_nblocks blocks in the disk altogether.
 	// LAB 5: Your code here.
     uint32_t blockno;
-    for (blockno = 1;blockno<=super->s_nblocks;blockno++){
+    for (blockno = 0;blockno<super->s_nblocks;blockno++){
         if (bitmap[blockno/32] & 1<<(blockno%32)){
             bitmap[blockno/32] &= ~(1<<(blockno%32));
             flush_block(diskaddr(blockno));
@@ -155,8 +155,8 @@ file_block_walk(struct File *f, uint32_t filebno, uint32_t **ppdiskbno, bool all
        if (filebno<NINDIRECT){
            if(f->f_indirect == 0){
                //if(!alloc)
-                   return -E_NOT_FOUND;
-               //f->f_indirect = alloc_block();
+               //    return -E_NOT_FOUND;
+               f->f_indirect = alloc_block();
            }
            addr = (uint32_t*)diskaddr(f->f_indirect);
            if (addr[filebno] == 0){
