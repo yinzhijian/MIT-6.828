@@ -5,7 +5,7 @@ void transmit_test(){
     int r,i;
     for (i = 0;i <TX_DESC_NUM*2 + 10;i++){
         do{
-        r = transmit((uint32_t)test_packet,5);
+        r = transmit((uint32_t)test_packet,4);
         }while(r == -E_QUEUE_FULL);
     }
 }
@@ -14,14 +14,14 @@ int transmit(uint32_t addr,uint32_t length){
         return -E_INVAL;
     uint32_t tail = lae1000[E1000_TDT/4];
     //check tx_desc array is full
-    if ((tx_desc[tail].lower.flags.cmd & E1000_TXD_CMD_RS)  && (tx_desc[tail].upper.fields.status & E1000_TXD_STAT_DD) == 0)
+    if ((tx_desc[tail].lower.data & E1000_TXD_CMD_RS)  && (tx_desc[tail].upper.data & E1000_TXD_STAT_DD) == 0)
         return -E_QUEUE_FULL;
-    tx_desc[tail].buffer_addr = addr;
+    tx_desc[tail].buffer_addr = PADDR((void *)addr);
     //reset lower data
-    tx_desc[tail].lower.data = 0;
+    tx_desc[tail].lower.data = E1000_TXD_CMD_RS | E1000_TXD_CMD_EOP;
     tx_desc[tail].lower.flags.length = length;
     //set Report Status bit.When set, the Ethernet controller needs to report the status information
-    tx_desc[tail].lower.flags.cmd |= E1000_TXD_CMD_RS;
+    //tx_desc[tail].lower.flags.cmd |= E1000_TXD_CMD_RS;
     //reset upper data
     tx_desc[tail].upper.data = 0;
     // update TDT
@@ -35,7 +35,7 @@ e1000_init(struct pci_func *pcif){
     lae1000 = mmio_map_region(pcif->reg_base[0],pcif->reg_size[0]);
     cprintf("e1000 status:%08x\n",lae1000[E1000_STATUS/4]);
     //Transmit Initialization
-    lae1000[E1000_TDBAL/4] = (uint32_t)tx_desc;
+    lae1000[E1000_TDBAL/4] = (uint32_t)(PADDR((void *)tx_desc));
     //Transmit Descriptor Length 
     lae1000[E1000_TDLEN/4] = sizeof(struct e1000_tx_desc)*TX_DESC_NUM;
     //Transmit Descriptor Head
