@@ -25,7 +25,8 @@ enum {
 	E_FILE_EXISTS	,	// File already exists
 	E_NOT_EXEC	,	// File not a valid executable
 	E_NOT_SUPP	,	// Operation not supported
-
+    // network error
+	E_QUEUE_FULL	,	// queue is full,should retry
 	MAXERROR
 };
 
