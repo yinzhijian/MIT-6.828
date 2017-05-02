@@ -27,7 +27,7 @@ enum {
 	E_NOT_SUPP	,	// Operation not supported
     // network error
 	E_QUEUE_FULL	,	// queue is full,should retry
-	E_QUEUE_EMPTY	,	// queue is empty,should retry
+	E_RECEIVE_RETRY	,	// receive error,should retry
 	MAXERROR
 };
 

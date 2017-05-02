@@ -13,11 +13,10 @@ output(envid_t ns_envid)
 	//	- send the packet to the device driver
 	uint32_t req, whom;
 	int perm, r;
-	void *pg;
 
 	while (1) {
 		perm = 0;
-		req = ipc_recv((int32_t *) &whom, (void *)&nsipcbuf, &perm);
+		req = ipc_recv((int32_t *) &whom, (void *)&nsipcbuf.pkt, &perm);
 		if (debug)
 			cprintf("ns output req %d from %08x [page %08x: %s]\n", req, whom, uvpt[PGNUM(&nsipcbuf)], nsipcbuf);
 
@@ -28,16 +27,17 @@ output(envid_t ns_envid)
 			continue; // just leave it hanging...
 		}
 
-		pg = NULL;
 		if (req == NSREQ_OUTPUT) {
             do{
 			    r = sys_transmit(nsipcbuf.pkt.jp_data,nsipcbuf.pkt.jp_len);
             }while(r == -E_QUEUE_FULL);
+            if (r < 0)
+                panic("output error:%e\n",r);
 		} else {
 			cprintf("Invalid request code %d from %08x\n", req, whom);
 			r = -E_INVAL;
 		}
 		//ipc_send(whom, r, pg, perm);
-		sys_page_unmap(0, &nsipcbuf);
+		//sys_page_unmap(0, &nsipcbuf);
 	}
 }

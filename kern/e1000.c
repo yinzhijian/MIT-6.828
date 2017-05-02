@@ -28,25 +28,27 @@ int transmit(void * addr,uint32_t length){
 }
 int 
 receive(void *addr){
-    uint32_t tail = (lae1000[E1000_RDT/4] + 1) %RX_DESC_NUM;
+    static uint32_t next = 0;
     int len = 0;
     //cprintf("receive tail:%08x,head:%08x\n",lae1000[E1000_RDT/4],lae1000[E1000_RDH/4]);
     if ((uint32_t)addr + MAX_RX_BUF >= UTOP)
         return -E_INVAL;
     //check rx_desc array is empty
-    if (!(rx_desc[tail].status&E1000_RXD_STAT_DD))
-        return -E_QUEUE_EMPTY;
-    assert(rx_desc[tail].status & E1000_RXD_STAT_EOP);
-    memcpy(addr,(void *)rx_buf[tail].buf,rx_desc[tail].length);
-    len = rx_desc[tail].length;
+    if (!(rx_desc[next].status&E1000_RXD_STAT_DD))
+        return -E_RECEIVE_RETRY;
+
+    assert(rx_desc[next].status & E1000_RXD_STAT_EOP);
+    memcpy(addr,(void *)rx_buf[next].buf,rx_desc[next].length);
+    len = rx_desc[next].length;
     //reset receive status
-    rx_desc[tail].status = 0;
-    rx_desc[tail].length = 0;
-    rx_desc[tail].csum = 0;
-    rx_desc[tail].errors = 0;
-    rx_desc[tail].special = 0;
+    rx_desc[next].status = 0;
+    rx_desc[next].length = 0;
+    rx_desc[next].csum = 0;
+    rx_desc[next].errors = 0;
+    rx_desc[next].special = 0;
     // update RDT
-    lae1000[E1000_RDT/4] = tail;
+    lae1000[E1000_RDT/4] = next;
+    next = (next + 1)%RX_DESC_NUM;
     return len;
 }
 
@@ -69,8 +71,6 @@ e1000_init(struct pci_func *pcif){
     //Transmit Descriptor Tail
     lae1000[E1000_TDT/4] = 0;
     //transmit control
-    //enable for normal operation
-    lae1000[E1000_TCTL/4] |= E1000_TCTL_EN;
     //Pad Short Packets 
     lae1000[E1000_TCTL/4] |= E1000_TCTL_PSP;
     //Collision Threshold only has meaning in half duplex mode
@@ -79,6 +79,8 @@ e1000_init(struct pci_func *pcif){
     lae1000[E1000_TCTL/4] |= 0x40 << 12;
     //For the IEEE 802.3 standard IPG value of 96-bit time, the value that should be programmed into IPGT is 10
     lae1000[E1000_TIPG/4] = 10;
+    //enable for normal operation
+    lae1000[E1000_TCTL/4] |= E1000_TCTL_EN;
 
     //Receive Initialization
     // set Receive Address to 52:54:00:12:34:56
@@ -99,7 +101,7 @@ e1000_init(struct pci_func *pcif){
     // init rx queue's buf addr
     memset(rx_desc, 0, sizeof(rx_desc));
 
-    for (i = 0; i < TX_DESC_NUM-1; ++i) {
+    for (i = 0; i < RX_DESC_NUM-1; ++i) {
         rx_desc[i].buffer_addr = PADDR(&rx_buf[i]);
     }
     //Receive Descriptor Head
@@ -109,8 +111,6 @@ e1000_init(struct pci_func *pcif){
 
     // reset receiver control reg
     lae1000[E1000_RCTL/4] = 0;
-    // receiver Enable
-    lae1000[E1000_RCTL/4] |= E1000_RCTL_EN;
     // Long Packet Disable
     //lae1000[E1000_RCTL/4] &= ~E1000_RCTL_LPE;
     // Loopback Mode (RCTL.LBM) should be set to 00b for normal operation
@@ -119,6 +119,8 @@ e1000_init(struct pci_func *pcif){
     lae1000[E1000_RCTL/4] |= E1000_RCTL_SZ_2048;
     // Strip Ethernet CRC 
     lae1000[E1000_RCTL/4] |= E1000_RCTL_SECRC;
+    // receiver Enable
+    lae1000[E1000_RCTL/4] |= E1000_RCTL_EN;
 
     return 0;
 }
