@@ -725,7 +725,8 @@ struct e1000_tx_desc {
 
 /* Receive Descriptor */
 struct e1000_rx_desc {
-    uint64_t buffer_addr; /* Address of the descriptor's data buffer */
+    uint32_t buffer_addr; /* Address of the descriptor's data buffer */
+    uint32_t buffer_addr_high; /* Address of the descriptor's data buffer */
     uint16_t length;     /* Length of data DMAed into data buffer */
     uint16_t csum;       /* Packet checksum */
     uint8_t status;      /* Descriptor status */

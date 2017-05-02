@@ -128,3 +128,9 @@ sys_transmit(void *addr,uint32_t len)
 {
 	return syscall(SYS_transmit, 0, (uint32_t)addr, len, 0, 0, 0);
 }
+
+int
+sys_receive(void *addr)
+{
+	return syscall(SYS_receive, 0, (uint32_t)addr,0, 0, 0, 0);
+}

@@ -463,6 +463,17 @@ sys_transmit(void *addr,uint32_t len)
         return -E_INVAL;
     return transmit(addr,len);
 }
+
+// receive packet ,stored at addr.
+// return >0 is length of packet,if -E_QUEUE_EMPTY then retry
+static int
+sys_receive(void *addr)
+{
+    if ((uint32_t)addr >= UTOP)
+        return -E_INVAL;
+    return receive(addr);
+}
+
 // Dispatches to the correct kernel function, passing the arguments.
 int32_t
 syscall(uint32_t syscallno, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, uint32_t a5)
@@ -507,6 +518,8 @@ syscall(uint32_t syscallno, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, 
 			return sys_time_msec();
 		case SYS_transmit:
 			return sys_transmit((void *)a1,a2);
+		case SYS_receive:
+			return sys_receive((void *)a1);
 		default:
 			return -E_INVAL;
 	}
