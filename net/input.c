@@ -41,7 +41,7 @@ input(envid_t ns_envid)
         nsipcbuf.pkt.jp_len= r;
         memcpy(nsipcbuf.pkt.jp_data ,rx_local_buf.buf,nsipcbuf.pkt.jp_len);
         ipc_send(ns_envid, NSREQ_INPUT, (void *)&nsipcbuf, PTE_P|PTE_W|PTE_U);
-        sleep(50);
+        sleep(25);
 		//sys_page_unmap(0, &nsipcbuf);
     }
 }
